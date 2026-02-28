@@ -1,0 +1,19 @@
+{
+  "name": "aliremote",
+  "private": true,
+  "description": "Remote device control platform — Android emulators, automation, dashboard",
+  "scripts": {
+    "dev": "pnpm --filter @aliremote/shared build && pnpm -r --parallel dev",
+    "dev:web": "pnpm --filter web dev",
+    "dev:api": "pnpm --filter api dev",
+    "build": "pnpm run -r build",
+    "build:web": "pnpm --filter web build",
+    "build:api": "pnpm --filter api build",
+    "lint": "pnpm run -r lint",
+    "clean": "pnpm run -r clean && rm -rf node_modules"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@9.14.2"
+}
