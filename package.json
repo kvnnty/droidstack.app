@@ -6,6 +6,8 @@
     "dev": "pnpm --filter @aliremote/shared build && pnpm -r --parallel dev",
     "dev:web": "pnpm --filter web dev",
     "dev:api": "pnpm --filter api dev",
+    "dev:agent": "pnpm --filter @aliremote/agent dev",
+    "dev:orchestrator": "pnpm --filter orchestrator dev",
     "build": "pnpm run -r build",
     "build:web": "pnpm --filter web build",
     "build:api": "pnpm --filter api build",

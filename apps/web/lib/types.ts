@@ -1,25 +1,30 @@
-/** Device status */
-export type DeviceStatus = 'online' | 'offline' | 'busy' | 'error';
+export type DeviceStatus = 'online' | 'offline' | 'busy' | 'error' | 'starting' | 'running' | 'stopped';
 
-/** Device (emulator or physical) */
 export interface Device {
   id: string;
   userId: string;
   groupId?: string;
   name: string;
+  deviceName?: string;
   deviceSerial?: string;
   status: DeviceStatus;
   type: 'emulator' | 'physical';
   osVersion?: string;
+  androidVersion?: string;
+  cpu?: number;
+  ram?: number;
+  storage?: number;
   metadata?: Record<string, unknown>;
   batteryLevel?: number;
   lastSeenAt?: string;
+  containerId?: string;
+  adbPort?: number;
+  novncPort?: number;
   ports?: { novnc?: number; adb?: number };
   createdAt: string;
   updatedAt: string;
 }
 
-/** Device group */
 export interface DeviceGroup {
   id: string;
   userId: string;
@@ -29,7 +34,6 @@ export interface DeviceGroup {
   updatedAt: string;
 }
 
-/** Command types */
 export type CommandType =
   | 'install_app'
   | 'uninstall_app'
@@ -40,7 +44,6 @@ export type CommandType =
   | 'clear_data'
   | 'push_notification';
 
-/** Device command */
 export interface DeviceCommand {
   id: string;
   userId: string;
@@ -54,10 +57,8 @@ export interface DeviceCommand {
   completedAt?: string;
 }
 
-/** Alert types */
 export type AlertType = 'low_battery' | 'offline' | 'error' | 'high_temp';
 
-/** Device alert */
 export interface DeviceAlert {
   id: string;
   deviceId: string;
@@ -66,17 +67,4 @@ export interface DeviceAlert {
   severity: 'info' | 'warning' | 'critical';
   createdAt: string;
   resolvedAt?: string;
-}
-
-/** User (from Supabase Auth) */
-export interface User {
-  id: string;
-  email: string;
-  createdAt?: string;
-}
-
-/** API response wrapper */
-export interface ApiResponse<T> {
-  data?: T;
-  error?: string;
 }

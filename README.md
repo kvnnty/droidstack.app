@@ -25,19 +25,23 @@ pnpm dev:web    # http://localhost:3000
 pnpm dev:api    # http://localhost:3001
 ```
 
+See [docs/SETUP.md](docs/SETUP.md) for full setup (Supabase, emulator, agent).
+
 ## Project structure
 
 ```
 aliremote.com/
 ├── apps/
-│   ├── web/          # Next.js frontend
+│   ├── web/          # Next.js frontend (dashboard)
 │   └── api/          # NestJS backend
 ├── packages/
 │   └── shared/       # Shared types & constants
+├── agent/            # Android agent (ADB command executor)
 ├── docker/
 │   └── emulator/     # docker-android config
 ├── docs/
-└── PROJECT.md        # Full project spec
+│   └── SETUP.md      # Full setup instructions
+└── PROJECT.md        # Project spec
 ```
 
 ## Auth

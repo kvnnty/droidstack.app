@@ -1,10 +1,13 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { AgentModule } from './agent/agent.module';
+import { BillingModule } from './billing/billing.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { DevicesModule } from './devices/devices.module';
+import { OrchestratorModule } from './orchestrator/orchestrator.module';
 import { SupabaseModule } from './supabase/supabase.module';
 import { UsersModule } from './users/users.module';
 
@@ -19,6 +22,9 @@ import { UsersModule } from './users/users.module';
     AuthModule,
     UsersModule,
     DevicesModule,
+    AgentModule,
+    OrchestratorModule,
+    BillingModule,
   ],
   controllers: [AppController],
   providers: [
