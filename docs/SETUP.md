@@ -44,7 +44,7 @@ User → Dashboard (Next.js) → Backend API (NestJS) → Device Orchestrator �
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 NEXT_PUBLIC_API_URL=http://localhost:3001
 ```
 
@@ -52,7 +52,7 @@ NEXT_PUBLIC_API_URL=http://localhost:3001
 
 ```env
 SUPABASE_URL=https://xxx.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+SUPABASE_SECRET_KEY=your-secret-key
 CORS_ORIGIN=http://localhost:3000
 PORT=3001
 

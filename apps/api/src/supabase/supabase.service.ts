@@ -8,15 +8,15 @@ export class SupabaseService {
   constructor() {
     const url =
       process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const secretKey = process.env.SUPABASE_SECRET_KEY;
 
-    if (!url || !serviceRoleKey) {
+    if (!url || !secretKey) {
       throw new Error(
-        'Missing SUPABASE_URL (or NEXT_PUBLIC_SUPABASE_URL) and SUPABASE_SERVICE_ROLE_KEY. Add them to apps/api/.env',
+        'Missing SUPABASE_URL (or NEXT_PUBLIC_SUPABASE_URL) and SUPABASE_SECRET_KEY. Add them to apps/api/.env',
       );
     }
 
-    this.client = createClient(url, serviceRoleKey, {
+    this.client = createClient(url, secretKey, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,

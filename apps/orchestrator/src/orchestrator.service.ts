@@ -9,6 +9,7 @@ const PORT_RANGE_END = parseInt(process.env.PORT_RANGE_END ?? '7000', 10);
 export class OrchestratorService {
   private docker: Docker;
   private usedPorts = new Set<number>();
+  private containerPorts = new Map<string, { adbPort: number; novncPort: number }>();
 
   constructor() {
     this.docker = new Docker({ socketPath: '/var/run/docker.sock' });

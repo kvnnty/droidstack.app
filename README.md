@@ -60,12 +60,12 @@ Copy `.env.example` to `.env.local` (web) and `.env` (api):
 **Web** (`apps/web/.env.local`):
 
 - `NEXT_PUBLIC_SUPABASE_URL` — Supabase project URL
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Supabase anon/public key
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` — Supabase publishable key (safe for browser)
 
 **API** (`apps/api/.env`):
 
 - `SUPABASE_URL` or `NEXT_PUBLIC_SUPABASE_URL` — Supabase project URL
-- `SUPABASE_SERVICE_ROLE_KEY` — Service role key (for server-side auth verification)
+- `SUPABASE_SECRET_KEY` — Supabase secret key (for server-side auth verification)
 - `CORS_ORIGIN` — Allowed origin (default: `http://localhost:3000`)
 
 ## License
