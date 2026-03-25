@@ -8,6 +8,7 @@ async function bootstrap() {
   app.use(json({ verify: (req: any, _res, buf) => { req.rawBody = buf; } }));
   app.enableCors({
     origin: process.env.CORS_ORIGIN ?? 'http://localhost:3000',
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Organization-Id'],
   });
   const port = process.env.PORT ?? 3001;
   await app.listen(port);

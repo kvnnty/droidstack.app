@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * ALI Remote Android Agent
+ * Droidstack Android Agent
  *
  * Runs on the host machine (or in a container) that has ADB access to the device/emulator.
  * Polls the API for commands and executes them via ADB.

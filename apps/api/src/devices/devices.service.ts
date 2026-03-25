@@ -1,12 +1,13 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type {
   Device,
   DeviceGroup,
   DeviceCommand,
   DeviceAlert,
   CommandType,
-} from '@aliremote/shared';
+} from '@droidstack/shared';
 import { BillingService } from '../billing/billing.service';
+import type { OrgRequestContext, OrgRole } from '../organizations/organizations.types';
 import { OrchestratorService } from '../orchestrator/orchestrator.service';
 import { SupabaseService } from '../supabase/supabase.service';
 
@@ -16,6 +17,7 @@ function mapDevice(row: Record<string, unknown>): Device & { containerId?: strin
   return {
     id: row.id as string,
     userId: row.user_id as string,
+    organizationId: row.organization_id as string | undefined,
     groupId: row.group_id as string | undefined,
     name: row.name as string,
     deviceName: (row.device_name as string) ?? row.name as string,
@@ -39,6 +41,7 @@ function mapGroup(row: Record<string, unknown>): DeviceGroup {
   return {
     id: row.id as string,
     userId: row.user_id as string,
+    organizationId: row.organization_id as string | undefined,
     name: row.name as string,
     deviceCount: row.device_count as number | undefined,
     createdAt: row.created_at as string,
@@ -85,27 +88,87 @@ export class DevicesService {
     return this.supabase.getClient();
   }
 
-  async listDevices(userId: string): Promise<Device[]> {
+  private managesDevices(role: OrgRole): boolean {
+    return role === 'owner' || role === 'admin';
+  }
+
+  private async assertDeviceAccess(ctx: OrgRequestContext, deviceId: string): Promise<void> {
+    const { data: dev } = await this.getClient()
+      .from('devices')
+      .select('id')
+      .eq('id', deviceId)
+      .eq('organization_id', ctx.organizationId)
+      .maybeSingle();
+
+    if (!dev) throw new NotFoundException('Device not found');
+
+    if (this.managesDevices(ctx.role)) return;
+
+    const { data: grant } = await this.getClient()
+      .from('organization_member_device_access')
+      .select('device_id')
+      .eq('organization_id', ctx.organizationId)
+      .eq('user_id', ctx.userId)
+      .eq('device_id', deviceId)
+      .maybeSingle();
+
+    if (!grant) throw new ForbiddenException('No access to this device');
+  }
+
+  private async assertGroupInOrg(ctx: OrgRequestContext, groupId: string): Promise<void> {
+    const { data } = await this.getClient()
+      .from('device_groups')
+      .select('id')
+      .eq('id', groupId)
+      .eq('organization_id', ctx.organizationId)
+      .maybeSingle();
+
+    if (!data) throw new NotFoundException('Group not found');
+  }
+
+  private async accessibleDeviceIds(ctx: OrgRequestContext): Promise<string[] | null> {
+    if (this.managesDevices(ctx.role)) return null;
+
     const { data, error } = await this.getClient()
+      .from('organization_member_device_access')
+      .select('device_id')
+      .eq('organization_id', ctx.organizationId)
+      .eq('user_id', ctx.userId);
+
+    if (error) throw new Error(error.message);
+    return (data ?? []).map((r: { device_id: string }) => r.device_id);
+  }
+
+  async listDevices(ctx: OrgRequestContext): Promise<Device[]> {
+    const ids = await this.accessibleDeviceIds(ctx);
+    let query = this.getClient()
       .from('devices')
       .select('*')
-      .eq('user_id', userId)
+      .eq('organization_id', ctx.organizationId)
       .order('updated_at', { ascending: false });
 
+    if (ids) {
+      if (ids.length === 0) return [];
+      query = query.in('id', ids);
+    }
+
+    const { data, error } = await query;
     if (error) throw new Error(error.message);
     return (data ?? []).map(mapDevice);
   }
 
-  async getDevice(userId: string, id: string): Promise<Device | null> {
+  async getDevice(ctx: OrgRequestContext, id: string): Promise<Device | null> {
     const { data, error } = await this.getClient()
       .from('devices')
       .select('*')
       .eq('id', id)
-      .eq('user_id', userId)
+      .eq('organization_id', ctx.organizationId)
       .maybeSingle();
 
     if (error) throw new Error(error.message);
-    return data ? mapDevice(data) : null;
+    if (!data) return null;
+    await this.assertDeviceAccess(ctx, id);
+    return mapDevice(data);
   }
 
   generateAgentToken(): string {
@@ -118,7 +181,7 @@ export class DevicesService {
   }
 
   async createDevice(
-    userId: string,
+    ctx: OrgRequestContext,
     body: {
       name: string;
       deviceName?: string;
@@ -131,16 +194,25 @@ export class DevicesService {
       type?: 'emulator' | 'physical';
       osVersion?: string;
       metadata?: Record<string, unknown>;
-    }
+    },
   ): Promise<Device> {
-    const canCreate = await this.billing.canCreateDevice(userId);
+    if (!this.managesDevices(ctx.role)) {
+      throw new ForbiddenException('Only administrators can create devices');
+    }
+
+    if (body.groupId) {
+      await this.assertGroupInOrg(ctx, body.groupId);
+    }
+
+    const canCreate = await this.billing.canCreateDeviceInOrg(ctx.ownerUserId, ctx.organizationId);
     if (!canCreate.allowed) throw new Error(canCreate.reason ?? 'Cannot create device');
 
     const agentToken = this.generateAgentToken();
     const { data: inserted, error } = await this.getClient()
       .from('devices')
       .insert({
-        user_id: userId,
+        user_id: ctx.ownerUserId,
+        organization_id: ctx.organizationId,
         name: body.name,
         device_name: body.deviceName ?? body.name,
         android_version: body.androidVersion ?? '13',
@@ -174,7 +246,7 @@ export class DevicesService {
         })
         .eq('id', inserted.id);
 
-      await this.auditLog(inserted.id, userId, 'create', { containerId, adbPort, novncPort });
+      await this.auditLog(inserted.id, ctx.userId, 'create', { containerId, adbPort, novncPort });
     } catch (e) {
       await this.getClient()
         .from('devices')
@@ -197,20 +269,28 @@ export class DevicesService {
       .insert({ device_id: deviceId, user_id: userId, action, payload: payload ?? {} });
   }
 
-  async startDevice(userId: string, deviceId: string): Promise<Device> {
-    const device = await this.getDevice(userId, deviceId);
-    if (!device) throw new Error('Device not found');
-    const d = await this.getClient().from('devices').select('container_id').eq('id', deviceId).eq('user_id', userId).single();
+  async startDevice(ctx: OrgRequestContext, deviceId: string): Promise<Device> {
+    await this.assertDeviceAccess(ctx, deviceId);
+    const device = await this.getDevice(ctx, deviceId);
+    if (!device) throw new NotFoundException('Device not found');
+
+    const d = await this.getClient()
+      .from('devices')
+      .select('container_id')
+      .eq('id', deviceId)
+      .eq('organization_id', ctx.organizationId)
+      .single();
+
     if (d.data?.container_id) throw new Error('Device already running');
 
-    const canCreate = await this.billing.canCreateDevice(userId);
+    const canCreate = await this.billing.canCreateDeviceInOrg(ctx.ownerUserId, ctx.organizationId);
     if (!canCreate.allowed) throw new Error(canCreate.reason ?? 'Cannot start device');
 
     await this.getClient()
       .from('devices')
       .update({ status: 'starting', updated_at: new Date().toISOString() })
       .eq('id', deviceId)
-      .eq('user_id', userId);
+      .eq('organization_id', ctx.organizationId);
 
     try {
       const { containerId, adbPort, novncPort } = await this.orchestrator.startContainer(deviceId);
@@ -226,15 +306,15 @@ export class DevicesService {
           metadata: { ...meta, ports: { adb: adbPort, novnc: novncPort } },
         })
         .eq('id', deviceId)
-        .eq('user_id', userId);
+        .eq('organization_id', ctx.organizationId);
 
-      await this.auditLog(deviceId, userId, 'start', { containerId });
+      await this.auditLog(deviceId, ctx.userId, 'start', { containerId });
     } catch (e) {
       await this.getClient()
         .from('devices')
         .update({ status: 'error', updated_at: new Date().toISOString() })
         .eq('id', deviceId)
-        .eq('user_id', userId);
+        .eq('organization_id', ctx.organizationId);
       throw e;
     }
 
@@ -246,15 +326,17 @@ export class DevicesService {
     return mapDevice(data!);
   }
 
-  async stopDevice(userId: string, deviceId: string): Promise<Device> {
+  async stopDevice(ctx: OrgRequestContext, deviceId: string): Promise<Device> {
+    await this.assertDeviceAccess(ctx, deviceId);
+
     const { data } = await this.getClient()
       .from('devices')
       .select('*')
       .eq('id', deviceId)
-      .eq('user_id', userId)
+      .eq('organization_id', ctx.organizationId)
       .single();
 
-    if (!data) throw new Error('Device not found');
+    if (!data) throw new NotFoundException('Device not found');
     const containerId = data.container_id as string | null;
     if (!containerId) {
       await this.getClient()
@@ -274,10 +356,10 @@ export class DevicesService {
           metadata: { ...(data.metadata as object ?? {}), ports: null },
         })
         .eq('id', deviceId)
-        .eq('user_id', userId);
+        .eq('organization_id', ctx.organizationId);
     }
 
-    await this.auditLog(deviceId, userId, 'stop');
+    await this.auditLog(deviceId, ctx.userId, 'stop');
     const { data: updated } = await this.getClient()
       .from('devices')
       .select('*')
@@ -286,50 +368,61 @@ export class DevicesService {
     return mapDevice(updated ?? data);
   }
 
-  async restartDevice(userId: string, deviceId: string): Promise<Device> {
+  async restartDevice(ctx: OrgRequestContext, deviceId: string): Promise<Device> {
+    await this.assertDeviceAccess(ctx, deviceId);
+
     const { data } = await this.getClient()
       .from('devices')
       .select('*')
       .eq('id', deviceId)
-      .eq('user_id', userId)
+      .eq('organization_id', ctx.organizationId)
       .single();
 
-    if (!data) throw new Error('Device not found');
+    if (!data) throw new NotFoundException('Device not found');
     const containerId = data.container_id as string | null;
     if (!containerId) throw new Error('Device not running');
 
     await this.orchestrator.restartContainer(containerId);
-    await this.auditLog(deviceId, userId, 'restart');
+    await this.auditLog(deviceId, ctx.userId, 'restart');
     return mapDevice(data);
   }
 
-  async regenerateAgentToken(userId: string, deviceId: string): Promise<string> {
+  async regenerateAgentToken(ctx: OrgRequestContext, deviceId: string): Promise<string> {
+    if (!this.managesDevices(ctx.role)) {
+      throw new ForbiddenException('Only administrators can rotate agent tokens');
+    }
+    await this.assertDeviceAccess(ctx, deviceId);
+
     const token = this.generateAgentToken();
     const { error } = await this.getClient()
       .from('devices')
       .update({ agent_token: token })
       .eq('id', deviceId)
-      .eq('user_id', userId);
+      .eq('organization_id', ctx.organizationId);
     if (error) throw new Error(error.message);
     return token;
   }
 
-  async getDeviceWithToken(userId: string, id: string): Promise<(Device & { agentToken?: string }) | null> {
+  async getDeviceWithToken(ctx: OrgRequestContext, id: string): Promise<(Device & { agentToken?: string }) | null> {
+    if (!this.managesDevices(ctx.role)) {
+      throw new ForbiddenException('Only administrators can view agent install credentials');
+    }
     const { data, error } = await this.getClient()
       .from('devices')
       .select('*')
       .eq('id', id)
-      .eq('user_id', userId)
+      .eq('organization_id', ctx.organizationId)
       .maybeSingle();
 
     if (error) throw new Error(error.message);
     if (!data) return null;
+    await this.assertDeviceAccess(ctx, id);
     const device = mapDevice(data);
     return { ...device, agentToken: data.agent_token as string };
   }
 
   async updateDevice(
-    userId: string,
+    ctx: OrgRequestContext,
     id: string,
     updates: Partial<{
       name: string;
@@ -337,8 +430,17 @@ export class DevicesService {
       status: Device['status'];
       batteryLevel: number | null;
       metadata: Record<string, unknown>;
-    }>
+    }>,
   ): Promise<Device> {
+    if (!this.managesDevices(ctx.role)) {
+      throw new ForbiddenException('Only administrators can update devices');
+    }
+    await this.assertDeviceAccess(ctx, id);
+
+    if (updates.groupId) {
+      await this.assertGroupInOrg(ctx, updates.groupId);
+    }
+
     const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (updates.name != null) payload.name = updates.name;
     if (updates.groupId !== undefined) payload.group_id = updates.groupId;
@@ -349,7 +451,7 @@ export class DevicesService {
         .from('devices')
         .select('metadata')
         .eq('id', id)
-        .eq('user_id', userId)
+        .eq('organization_id', ctx.organizationId)
         .single();
       const merged = { ...(current?.metadata as object ?? {}), ...updates.metadata };
       payload.metadata = merged;
@@ -359,7 +461,7 @@ export class DevicesService {
       .from('devices')
       .update(payload)
       .eq('id', id)
-      .eq('user_id', userId)
+      .eq('organization_id', ctx.organizationId)
       .select()
       .single();
 
@@ -367,12 +469,17 @@ export class DevicesService {
     return mapDevice(data);
   }
 
-  async deleteDevice(userId: string, id: string): Promise<void> {
+  async deleteDevice(ctx: OrgRequestContext, id: string): Promise<void> {
+    if (!this.managesDevices(ctx.role)) {
+      throw new ForbiddenException('Only administrators can delete devices');
+    }
+    await this.assertDeviceAccess(ctx, id);
+
     const { data } = await this.getClient()
       .from('devices')
       .select('container_id')
       .eq('id', id)
-      .eq('user_id', userId)
+      .eq('organization_id', ctx.organizationId)
       .single();
 
     if (data?.container_id) {
@@ -383,12 +490,12 @@ export class DevicesService {
       }
     }
 
-    await this.auditLog(id, userId, 'delete');
+    await this.auditLog(id, ctx.userId, 'delete');
     const { error } = await this.getClient()
       .from('devices')
       .delete()
       .eq('id', id)
-      .eq('user_id', userId);
+      .eq('organization_id', ctx.organizationId);
 
     if (error) throw new Error(error.message);
   }
@@ -410,30 +517,45 @@ export class DevicesService {
   }
 
   // --- Groups ---
-  async listGroups(userId: string): Promise<DeviceGroup[]> {
+  async listGroups(ctx: OrgRequestContext): Promise<DeviceGroup[]> {
     const { data, error } = await this.getClient()
       .from('device_groups')
       .select('*')
-      .eq('user_id', userId)
+      .eq('organization_id', ctx.organizationId)
       .order('updated_at', { ascending: false });
 
     if (error) throw new Error(error.message);
 
     const groups = (data ?? []).map(mapGroup);
+    const ids = await this.accessibleDeviceIds(ctx);
+
     for (const g of groups) {
-      const { count } = await this.getClient()
+      let q = this.getClient()
         .from('devices')
         .select('*', { count: 'exact', head: true })
         .eq('group_id', g.id);
+
+      if (ids !== null) {
+        if (ids.length === 0) {
+          (g as DeviceGroup & { deviceCount?: number }).deviceCount = 0;
+          continue;
+        }
+        q = q.in('id', ids);
+      }
+      const { count } = await q;
       (g as DeviceGroup & { deviceCount?: number }).deviceCount = count ?? 0;
     }
     return groups;
   }
 
-  async createGroup(userId: string, name: string): Promise<DeviceGroup> {
+  async createGroup(ctx: OrgRequestContext, name: string): Promise<DeviceGroup> {
+    if (!this.managesDevices(ctx.role)) {
+      throw new ForbiddenException('Only administrators can manage groups');
+    }
+
     const { data, error } = await this.getClient()
       .from('device_groups')
-      .insert({ user_id: userId, name })
+      .insert({ user_id: ctx.userId, organization_id: ctx.organizationId, name })
       .select()
       .single();
 
@@ -441,12 +563,17 @@ export class DevicesService {
     return mapGroup(data);
   }
 
-  async updateGroup(userId: string, id: string, name: string): Promise<DeviceGroup> {
+  async updateGroup(ctx: OrgRequestContext, id: string, name: string): Promise<DeviceGroup> {
+    if (!this.managesDevices(ctx.role)) {
+      throw new ForbiddenException('Only administrators can manage groups');
+    }
+    await this.assertGroupInOrg(ctx, id);
+
     const { data, error } = await this.getClient()
       .from('device_groups')
       .update({ name, updated_at: new Date().toISOString() })
       .eq('id', id)
-      .eq('user_id', userId)
+      .eq('organization_id', ctx.organizationId)
       .select()
       .single();
 
@@ -454,7 +581,12 @@ export class DevicesService {
     return mapGroup(data);
   }
 
-  async deleteGroup(userId: string, id: string): Promise<void> {
+  async deleteGroup(ctx: OrgRequestContext, id: string): Promise<void> {
+    if (!this.managesDevices(ctx.role)) {
+      throw new ForbiddenException('Only administrators can manage groups');
+    }
+    await this.assertGroupInOrg(ctx, id);
+
     await this.getClient()
       .from('devices')
       .update({ group_id: null })
@@ -464,17 +596,17 @@ export class DevicesService {
       .from('device_groups')
       .delete()
       .eq('id', id)
-      .eq('user_id', userId);
+      .eq('organization_id', ctx.organizationId);
 
     if (error) throw new Error(error.message);
   }
 
   // --- Commands ---
-  async listCommands(userId: string, limit = 50): Promise<DeviceCommand[]> {
+  async listCommands(ctx: OrgRequestContext, limit = 50): Promise<DeviceCommand[]> {
     const { data, error } = await this.getClient()
       .from('device_commands')
       .select('*')
-      .eq('user_id', userId)
+      .eq('user_id', ctx.userId)
       .order('created_at', { ascending: false })
       .limit(limit);
 
@@ -483,18 +615,32 @@ export class DevicesService {
   }
 
   async createCommand(
-    userId: string,
+    ctx: OrgRequestContext,
     body: {
       commandType: CommandType;
       payload?: Record<string, unknown>;
       targetType: 'device' | 'group';
       targetIds: string[];
-    }
+    },
   ): Promise<DeviceCommand> {
+    if (body.targetType === 'group' && !this.managesDevices(ctx.role)) {
+      throw new ForbiddenException('Members cannot run group-wide commands');
+    }
+
+    if (body.targetType === 'group') {
+      for (const gid of body.targetIds) {
+        await this.assertGroupInOrg(ctx, gid);
+      }
+    } else {
+      for (const did of body.targetIds) {
+        await this.assertDeviceAccess(ctx, did);
+      }
+    }
+
     const { data, error } = await this.getClient()
       .from('device_commands')
       .insert({
-        user_id: userId,
+        user_id: ctx.userId,
         command_type: body.commandType,
         payload: body.payload ?? {},
         target_type: body.targetType,
@@ -508,13 +654,19 @@ export class DevicesService {
   }
 
   // --- Alerts ---
-  async listAlerts(userId: string, unresolvedOnly = true): Promise<DeviceAlert[]> {
-    const deviceIds = (
-      await this.getClient()
+  async listAlerts(ctx: OrgRequestContext, unresolvedOnly = true): Promise<DeviceAlert[]> {
+    const ids = await this.accessibleDeviceIds(ctx);
+    let deviceIds: string[];
+
+    if (ids === null) {
+      const { data: devs } = await this.getClient()
         .from('devices')
         .select('id')
-        .eq('user_id', userId)
-    ).data?.map((d) => d.id) ?? [];
+        .eq('organization_id', ctx.organizationId);
+      deviceIds = (devs ?? []).map((d) => d.id as string);
+    } else {
+      deviceIds = ids;
+    }
 
     if (deviceIds.length === 0) return [];
 
@@ -536,13 +688,19 @@ export class DevicesService {
     return (data ?? []).map(mapAlert);
   }
 
-  async resolveAlert(userId: string, alertId: string): Promise<void> {
-    const deviceIds = (
-      await this.getClient()
+  async resolveAlert(ctx: OrgRequestContext, alertId: string): Promise<void> {
+    const ids = await this.accessibleDeviceIds(ctx);
+    let deviceIds: string[];
+
+    if (ids === null) {
+      const { data: devs } = await this.getClient()
         .from('devices')
         .select('id')
-        .eq('user_id', userId)
-    ).data?.map((d) => d.id) ?? [];
+        .eq('organization_id', ctx.organizationId);
+      deviceIds = (devs ?? []).map((d) => d.id as string);
+    } else {
+      deviceIds = ids;
+    }
 
     const { data: alert } = await this.getClient()
       .from('device_alerts')

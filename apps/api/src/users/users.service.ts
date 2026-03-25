@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { User } from '@supabase/supabase-js';
 import { SupabaseService } from '../supabase/supabase.service';
 
-/** User profile as returned by the API (matches @aliremote/shared User) */
+/** User profile as returned by the API (matches @droidstack/shared User) */
 export interface UserProfile {
   id: string;
   email: string;

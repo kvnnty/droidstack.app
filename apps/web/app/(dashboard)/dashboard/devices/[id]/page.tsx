@@ -1,9 +1,10 @@
 'use client';
 
 import { api } from '@/lib/api';
+import { canManageDevices, useOrg } from '@/lib/org-context';
 import type { Device } from '@/lib/types';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
 const STATUS_COLORS: Record<string, string> = {
@@ -15,7 +16,8 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function DeviceDetailPage() {
   const params = useParams();
-  const router = useRouter();
+  const { currentOrg } = useOrg();
+  const manageDevices = canManageDevices(currentOrg?.role);
   const id = params.id as string;
   const [device, setDevice] = useState<Device | null>(null);
   const [loading, setLoading] = useState(true);
@@ -28,7 +30,7 @@ export default function DeviceDetailPage() {
   const load = useCallback(async () => {
     try {
       setError(null);
-      const d = await api.devices.get(id, true);
+      const d = await api.devices.get(id, false);
       setDevice(d);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
@@ -194,35 +196,55 @@ export default function DeviceDetailPage() {
         </div>
 
         <div className="space-y-6">
-          <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <h2 className="font-display text-sm font-semibold text-slate-900">Agent setup</h2>
-            <p className="mt-2 text-sm text-slate-500">
-              Run the agent on the host with ADB access to the device.
-            </p>
-            {agentToken ? (
-              <pre className="mt-2 overflow-x-auto rounded bg-slate-100 p-3 text-xs">
-                {`DEVICE_ID=${device.id} \\
+          {manageDevices && (
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <h2 className="font-display text-sm font-semibold text-slate-900">Agent setup</h2>
+              <p className="mt-2 text-sm text-slate-500">
+                Run the agent on the host with ADB access to the device.
+              </p>
+              {agentToken ? (
+                <pre className="mt-2 overflow-x-auto rounded bg-slate-100 p-3 text-xs">
+                  {`DEVICE_ID=${device.id} \\
 DEVICE_TOKEN=${agentToken} \\
 ADB_SERIAL=emulator-5554 \\
 API_URL=${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'} \\
-pnpm --filter @aliremote/agent dev`}
-              </pre>
-            ) : (
-              <button
-                onClick={async () => {
-                  try {
-                    const { token } = await api.devices.regenerateToken(id);
-                    setAgentToken(token);
-                  } catch (e) {
-                    setError(e instanceof Error ? e.message : 'Failed');
-                  }
-                }}
-                className="mt-2 rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-              >
-                Generate agent token
-              </button>
-            )}
-          </div>
+pnpm --filter @droidstack/agent dev`}
+                </pre>
+              ) : (
+                <div className="mt-2 flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const d = await api.devices.get(id, true);
+                        const t = (d as Device & { agentToken?: string }).agentToken;
+                        if (t) setAgentToken(t);
+                      } catch (e) {
+                        setError(e instanceof Error ? e.message : 'Failed to load token');
+                      }
+                    }}
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
+                  >
+                    Show install command
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const { token } = await api.devices.regenerateToken(id);
+                        setAgentToken(token);
+                      } catch (e) {
+                        setError(e instanceof Error ? e.message : 'Failed');
+                      }
+                    }}
+                    className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                  >
+                    Regenerate agent token
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="rounded-xl border border-slate-200 bg-white p-4">
             <h2 className="font-display text-sm font-semibold text-slate-900">Device info</h2>

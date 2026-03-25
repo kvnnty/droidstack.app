@@ -7,7 +7,7 @@ export default function HomePage() {
       <nav className="fixed top-0 left-0 right-0 z-50 border-b border-slate-200/80 bg-white/80 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <Link href="/" className="font-display text-xl font-bold tracking-tight">
-            ALI Remote
+            Droidstack
           </Link>
           <div className="flex items-center gap-8">
             <Link
@@ -31,7 +31,7 @@ export default function HomePage() {
         <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(59,130,246,0.12),transparent)]" />
         <div className="mx-auto max-w-4xl px-6 text-center">
           <p className="mb-4 text-sm font-semibold uppercase tracking-wider text-blue-600">
-            Remote Device Control Platform
+            Remote Android orchestration
           </p>
           <h1 className="font-display text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl md:text-6xl lg:text-7xl">
             Control your Android devices
@@ -120,7 +120,7 @@ export default function HomePage() {
             Testimonials
           </p>
           <h2 className="font-display text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-            What others say about ALI Remote
+            What others say about Droidstack
           </h2>
           <div className="mt-12 grid gap-8 md:grid-cols-3">
             <TestimonialCard
@@ -164,7 +164,7 @@ export default function HomePage() {
       <footer className="border-t border-slate-200 py-12">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-6 px-6 sm:flex-row">
           <Link href="/" className="font-display text-lg font-bold">
-            ALI Remote
+            Droidstack
           </Link>
           <div className="flex gap-8 text-sm text-slate-600">
             <Link href="/dashboard" className="hover:text-slate-900">
@@ -179,7 +179,7 @@ export default function HomePage() {
           </div>
         </div>
         <p className="mt-8 text-center text-sm text-slate-500">
-          © {new Date().getFullYear()} ALI Remote. All rights reserved.
+          © {new Date().getFullYear()} Droidstack. All rights reserved.
         </p>
       </footer>
     </main>

@@ -1,9 +1,16 @@
 import { Injectable } from '@nestjs/common';
-import Docker from 'dockerode';
+import type Docker from 'dockerode';
 
 const EMULATOR_IMAGE = process.env.EMULATOR_IMAGE ?? 'budtmo/docker-android:emulator_13.0';
 const PORT_RANGE_START = parseInt(process.env.PORT_RANGE_START ?? '6000', 10);
 const PORT_RANGE_END = parseInt(process.env.PORT_RANGE_END ?? '7000', 10);
+
+// dockerode is CJS; default import can fail at runtime. Use require for reliable instantiation.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const DockerClass = require('dockerode') as new (opts?: { socketPath?: string }) => Docker;
+
+const DOCKER_SOCKET =
+  process.env.DOCKER_SOCKET || (process.platform === 'win32' ? '//./pipe/docker_engine' : '/var/run/docker.sock');
 
 @Injectable()
 export class OrchestratorService {
@@ -12,7 +19,7 @@ export class OrchestratorService {
   private containerPorts = new Map<string, { adbPort: number; novncPort: number }>();
 
   constructor() {
-    this.docker = new Docker({ socketPath: '/var/run/docker.sock' });
+    this.docker = new DockerClass({ socketPath: DOCKER_SOCKET });
   }
 
   private findFreePort(): number {
@@ -29,6 +36,25 @@ export class OrchestratorService {
     this.usedPorts.delete(port);
   }
 
+  private async ensureImage(image: string): Promise<void> {
+    try {
+      await this.docker.getImage(image).inspect();
+    } catch (e) {
+      if ((e as { statusCode?: number }).statusCode === 404) {
+        await new Promise<void>((resolve, reject) => {
+          this.docker.pull(image, (err, stream) => {
+            if (err) return reject(err);
+            this.docker.modem.followProgress(stream, (pullErr: Error | null) =>
+              pullErr ? reject(pullErr) : resolve()
+            );
+          });
+        });
+      } else {
+        throw e;
+      }
+    }
+  }
+
   async startContainer(deviceId: string): Promise<{
     containerId: string;
     adbPort: number;
@@ -38,9 +64,11 @@ export class OrchestratorService {
     const novncPort = this.findFreePort();
 
     try {
+      await this.ensureImage(EMULATOR_IMAGE);
+
       const container = await this.docker.createContainer({
         Image: EMULATOR_IMAGE,
-        name: `aliremote-${deviceId.slice(0, 8)}`,
+        name: `droidstack-${deviceId.slice(0, 8)}`,
         HostConfig: {
           Privileged: true,
           PortBindings: {

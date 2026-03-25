@@ -1,8 +1,8 @@
-# Project: ALI Remote Clone — Remote Device Control Platform
+# Droidstack — Product spec & project context
 
-> **Purpose:** This document captures all project knowledge, decisions, and context for agents, collaborators, and future contributors. Last updated: Feb 2025.
+> **Purpose:** This document captures project knowledge, decisions, and context for agents, collaborators, and future contributors. Last updated: March 2025.
 
-**TL;DR:** Solo dev, 1-month MVP, minimal budget. Android emulators in cloud (docker-android). Next.js + NestJS + Supabase. Target: beta testers, dev agencies (app testing), social media agencies. No billing in v1. Physical devices when capital allows.
+**TL;DR:** **Droidstack** is a remote **Android** device orchestration platform — control, scale, automate devices from a web dashboard. Solo-friendly MVP trajectory; cloud Android emulators (docker-android) first. Stack: Next.js + NestJS + Supabase + Stripe + orchestrator service. **iOS — coming soon** (physical devices / automation when feasible). Target: beta testers, dev agencies (app testing), social media workflows.
 
 ---
 
@@ -10,7 +10,9 @@
 
 ### What We're Building
 
-A **remote device control and automation platform** inspired by [ALI Remote](https://aliremote.com). The product enables users to:
+**Droidstack** — *Remote Android device orchestration platform. Control, scale, automate devices effortlessly.*
+
+The product enables users to:
 
 - **Control Android devices remotely** from a web dashboard (view screen, send taps, swipes, type)
 - **Automate tasks** (account setup, posting, workflows) across multiple devices
@@ -18,22 +20,23 @@ A **remote device control and automation platform** inspired by [ALI Remote](htt
 - **Manage teams** (multi-user, roles, permissions)
 - **Monitor activity** (analytics, reports, device status)
 
+**iOS** is **not** in v1; it is planned for a later phase (“coming soon” from a product positioning standpoint).
+
 ### Target Users (First Customers)
 
 - **Beta testers** — Early adopters for feedback
-- **Dev agencies** — Large-scale automated app testing (need virtual devices)
+- **Dev agencies** — Large-scale automated app testing (virtual devices)
 - **Social media agencies** — Organic growth (Instagram, TikTok, Reels, etc.)
 
-### Inspiration: ALI Remote
+### Market context: ALI Remote & peers
 
-ALI Remote is a commercial SaaS that uses **physical iPhones** in a device farm. Key facts:
+[ALI Remote](https://aliremote.com) and similar products often use **physical iPhones** in a device farm. Useful reference points:
 
-- **Physical devices only** — No emulators; iOS cannot run in cloud VMs
-- **Pricing:** $49–79 per iPhone/month (Standard, Premium, Ultimate tiers)
-- **Features:** 100% remote control, automations, scheduling, multi-user, analytics
-- **Full clone timeline:** 18–36 months with 4–6 engineers
+- **Physical devices** — Many commercial farms are iOS-heavy; iOS does not run in cloud VMs like Android emulators
+- **Pricing elsewhere:** Tens of dollars per managed device / month is common in the category
+- **Features in mature products:** Remote control, automations, scheduling, multi-user, analytics
 
-We are **not** building a 1:1 clone. We are building an **MVP** with a different strategy.
+**Droidstack** is **not** a 1:1 clone of any single competitor. It is an **MVP-first** product: Android + emulators + orchestration API, with room to grow into physical devices and iOS.
 
 ---
 
@@ -45,7 +48,7 @@ We are **not** building a 1:1 clone. We are building an **MVP** with a different
 |-------|----------|-----------|
 | **Phase 1 (MVP)** | Cloud Android emulators | No hardware cost, faster to ship, validate product |
 | **Phase 2** | Physical Android devices | When emulator detection limits production use |
-| **Phase 3** | Physical iPhones | When we have Apple approval, hardware, and budget |
+| **Phase 3** | **iOS (coming soon)** — physical iPhones | When Apple approval, hardware, and budget allow |
 
 ### Why Android First?
 
@@ -59,7 +62,7 @@ We are **not** building a 1:1 clone. We are building an **MVP** with a different
 - No upfront hardware investment
 - Scale by spinning up containers
 - Good for development, testing, and early customers
-- **Limitation:** Social apps (Instagram, TikTok) may detect emulators — physical devices needed for production use cases
+- **Limitation:** Social apps (Instagram, TikTok) may detect emulators — physical devices needed for some production use cases
 
 ---
 
@@ -71,11 +74,13 @@ We are **not** building a 1:1 clone. We are building an **MVP** with a different
 |-------|-------------|-------|
 | **Frontend** | Next.js 14+ (App Router) | TypeScript, Tailwind, shadcn/ui |
 | **API** | NestJS | TypeScript, modular structure |
-| **Database** | Supabase (Postgres) | Free tier only for MVP |
-| **Auth** | Supabase Auth | Part of Supabase |
+| **Orchestrator** | NestJS (`apps/orchestrator`) | Spawns/manages emulator containers, exposes ports (noVNC, ADB) |
+| **Database** | Supabase (Postgres Auth) | See [SETUP.md](./SETUP.md) for migrations |
+| **Auth** | Supabase Auth | Part of Supabase (Google, Email OTP) |
+| **Billing** | Stripe | Subscriptions / per-device pricing (see API billing module) |
 | **Cache/Queue** | Redis (e.g. Upstash) | BullMQ for jobs, sessions |
-| **Devices** | Android emulators (docker-android) | budtmo/docker-android or similar |
-| **Hosting** | Small Linux VPS | Budget: ~$5–15/mo; emulators need KVM (see §10) |
+| **Devices** | Android emulators (docker-android) | e.g. `budtmo/docker-android` |
+| **Hosting** | Linux VPS with KVM for emulators | Budget tier for API + web; KVM host for orchestrator (see section 10) |
 
 ### Supabase Free Tier Limits (Be Aware)
 
@@ -85,12 +90,12 @@ We are **not** building a 1:1 clone. We are building an **MVP** with a different
 - 2 GB bandwidth/month
 - 2 projects
 
-**Plan:** Use free tier for MVP; migrate or upgrade when limits hit.
+**Plan:** Use free tier for early MVP; migrate or upgrade when limits hit.
 
-### Redis (Defer for 1-Month MVP)
+### Redis (Defer Until Automation Heats Up)
 
 - **Needed for:** BullMQ (automation, scheduling), session storage
-- **1-month MVP:** Can skip if no automation — add when automation ships
+- **Early MVP:** Can skip if automation is minimal — add when scheduling/heavy jobs ship
 - **Option when needed:** Upstash Redis (free tier) or Redis on VPS
 
 ### Hosting Considerations
@@ -106,31 +111,31 @@ We are **not** building a 1:1 clone. We are building an **MVP** with a different
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  FRONTEND — Next.js                                              │
-│  Dashboard, device list, live view (noVNC embed), auth UI         │
+│  Dashboard, device list, live view (noVNC embed), auth, billing   │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │  API — NestJS                                                    │
-│  Auth, device CRUD, session management, automation triggers       │
+│  Auth, device CRUD, billing (Stripe), orchestrator integration    │
 └─────────────────────────────────────────────────────────────────┘
                               │
          ┌────────────────────┼────────────────────┐
          ▼                    ▼                    ▼
 ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
-│  Supabase       │  │  Redis (defer)   │  │  (Future)        │
-│  • Postgres     │  │  • BullMQ        │  │  Stripe         │
-│  • Auth         │  │  • Sessions      │  │                  │
+│  Supabase       │  │  Stripe          │  │  Redis (defer)   │
+│  • Postgres     │  │  • Checkout       │  │  • BullMQ        │
+│  • Auth         │  │  • Webhooks       │  │  • Sessions      │
 └─────────────────┘  └─────────────────┘  └─────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  EMULATOR LAYER — VPS with KVM (GCP / Hetzner dedicated)         │
+│  ORCHESTRATOR — VPS with KVM (GCP / Hetzner dedicated)           │
 │                                                                  │
 │  Docker containers: budtmo/docker-android                        │
-│  • noVNC on :6080 (browser view)                                 │
-│  • ADB on :5555 (automation)                                      │
-│  • NestJS spawns/stops containers, proxies noVNC, runs ADB        │
+│  • noVNC (browser view)                                          │
+│  • ADB (automation)                                               │
+│  • Service starts/stops containers, returns ports / container IDs │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -144,13 +149,14 @@ We are **not** building a 1:1 clone. We are building an **MVP** with a different
 
 ## 5. Features
 
-### 1-Month MVP Scope (Aggressive — Solo)
+### MVP Scope (Aggressive — Solo)
 
 *Must-have for launch. Everything else is post-MVP.*
 
 | Feature | Priority | Notes |
 |---------|----------|-------|
 | User auth (signup, login) | P0 | Supabase Auth |
+| **Billing (Stripe)** | P0 | Subscription / per-device model — aligns with current backend |
 | Device list & status | P0 | At least 1 emulator, online/offline |
 | Live device view | P0 | noVNC embed — see device screen |
 | Remote control (tap, swipe, type) | P0 | Via noVNC input or ADB |
@@ -158,20 +164,19 @@ We are **not** building a 1:1 clone. We are building an **MVP** with a different
 | Basic automation | P1 | *Defer if needed* — run script on device |
 | Scheduling | P2 | *Defer* — post-MVP |
 | Multi-user / teams | P2 | *Defer* — post-MVP |
-| Billing | — | Not in MVP |
 
 ### Post-MVP (After Launch)
 
-- Basic automation (BullMQ + ADB)
+- Deeper automation (BullMQ + ADB)
 - Simple scheduling
 - Multi-user, roles
 - More devices (scale emulators)
-- Stripe billing
+- Polish billing (usage, tiers)
 
 ### Future (When Capital / Feasible)
 
 - Physical Android device support (USB, Scrcpy)
-- Physical iPhone support (WebDriverAgent)
+- **iOS support** (WebDriverAgent, physical devices) — “coming soon” on the roadmap
 - Advanced automations (workflow builder)
 - Analytics dashboard
 - Social platform integrations (Instagram, TikTok APIs where allowed)
@@ -180,13 +185,13 @@ We are **not** building a 1:1 clone. We are building an **MVP** with a different
 
 ## 6. Timeline
 
-- **Total:** 1 month (solo)
+- **Total (initial burst):** ~1 month (solo) — historical planning baseline
 - **Week 1:** Project setup (Next.js + NestJS), Supabase auth, landing page, basic dashboard shell
 - **Week 2:** Emulator layer (1× docker-android on KVM host), device list API, status
 - **Week 3:** Live view (noVNC embed), remote control (tap/swipe/type)
 - **Week 4:** Polish, beta signup flow, deploy, testing
 
-*Automation, scheduling, multi-user → post-MVP.*
+*Automation, scheduling, multi-user → post-MVP. Billing/Stripe integrated as product matures.*
 
 ---
 
@@ -195,9 +200,9 @@ We are **not** building a 1:1 clone. We are building an **MVP** with a different
 ### Android Emulator Stack
 
 - **Image:** `budtmo/docker-android:emulator_13.0` (or 12, 14)
-- **Ports:** 6080 (noVNC), 5555 (ADB)
+- **Ports:** noVNC + ADB (dynamic range in orchestrator — see [SETUP.md](./SETUP.md))
 - **Control:** ADB connect, Appium (optional)
-- **View:** noVNC in browser, or scrcpy-web (shmayro/dockerify-android)
+- **View:** noVNC in browser, or scrcpy-web (e.g. shmayro/dockerify-android)
 
 ### Automation Options
 
@@ -216,22 +221,22 @@ We are **not** building a 1:1 clone. We are building an **MVP** with a different
 
 | Constraint | Mitigation |
 |------------|------------|
-| **1-month timeline** | Cut scope: auth + 1 device + live view + control only. Defer automation, scheduling, billing. |
+| **Aggressive solo timeline** | Cut scope: auth + billing path + 1 device + live view + control. Defer heavy automation, scheduling, org features. |
 | **Budget (cheap VPS)** | API + frontend on $5–10 VPS. Emulators need KVM → GCP free credit or nested-VPS (~$15–25). |
 | Supabase 500 MB limit | Fine for MVP; migrate if needed later |
 | Emulator detection by social apps | Accept for MVP; dev agencies (app testing) less affected |
 | KVM required for emulators | GCP $300 credit, or nested-VPS; avoid standard cheap VPS |
-| No iOS in Phase 1 | Android-only for MVP |
+| **No iOS in v1** | Android + emulators first; **iOS coming soon** in product messaging |
 
 ---
 
 ## 9. Competitors & References
 
-- **ALI Remote** — aliremote.com (physical iPhones, $49–79/device/mo)
-- **The Phone Farm** — thephonefarm.com (physical iPhones, $250+/mo)
+- **ALI Remote** — aliremote.com (category reference; physical iPhones, managed farms)
+- **The Phone Farm** — thephonefarm.com (physical iPhones, higher tiers)
 - **Firebase Test Lab** — Managed emulators, ~$1/hr
 - **AWS Device Farm** — Physical + virtual devices
-- **budtmo/docker-android** — GitHub, 14k+ stars, self-hosted emulators
+- **budtmo/docker-android** — GitHub, widely used self-hosted emulators
 
 ---
 
@@ -239,13 +244,15 @@ We are **not** building a 1:1 clone. We are building an **MVP** with a different
 
 | Item | Decision |
 |------|----------|
-| **Team** | Solo developer |
-| **Budget** | Little to none — cheap, enough for a small Linux VPS (~$5–15/mo) |
-| **MVP launch** | 1 month |
-| **Codebase** | From scratch |
-| **First customers** | Beta testers, dev agencies (app testing), social media agencies (organic growth) |
-| **Billing** | MVP first — no billing in v1 |
-| **Physical devices** | When we get capital or if feasible |
+| **Product name** | **Droidstack** |
+| **Team** | Solo developer (scalable) |
+| **Budget** | Minimal — small Linux VPS (~$5–15/mo) + KVM host for emulators when needed |
+| **MVP launch** | Fast iteration; scope per section 5 |
+| **Codebase** | Monorepo (`apps/web`, `apps/api`, `apps/orchestrator`, `packages/shared`, …) |
+| **First customers** | Beta testers, dev agencies (app testing), social media agencies |
+| **Billing** | **Stripe** — subscriptions / webhooks (see [SETUP.md](./SETUP.md)) |
+| **Physical devices** | When capital or customer demand justifies |
+| **iOS** | **Coming soon** — not in initial Android-emulator MVP |
 
 ### Budget Reality Check
 
@@ -258,26 +265,30 @@ We are **not** building a 1:1 clone. We are building an **MVP** with a different
 | Hetzner dedicated | ✅ Yes | €40+/mo | Emulators |
 | Nested-VPS providers (Cloudzy, SSDNodes) | ✅ Yes | ~$15–25/mo | Emulators — check specs |
 
-**Recommendation:** Run API + frontend on cheap VPS. For emulators in month 1: use **GCP $300 free credit** (new account) or a nested-VPS trial. Physical devices when capital allows.
+**Recommendation:** Run API + frontend on cheap VPS. For emulators: use **GCP $300 free credit** (new account) or a nested-VPS trial. Physical devices when capital allows.
 
 ---
 
 ## 11. File Structure
 
 ```
-aliremote.com/
-├── PROJECT.md          # This file
+droidstack/
+├── docs/
+│   ├── PROJECT.md      # This file
+│   └── SETUP.md        # Setup & environment
 ├── package.json        # Root workspace config
 ├── pnpm-workspace.yaml
 ├── tsconfig.base.json
 ├── apps/
-│   ├── web/            # Next.js 14 frontend
-│   └── api/            # NestJS backend
+│   ├── web/            # Next.js frontend
+│   ├── api/            # NestJS backend
+│   └── orchestrator/   # Emulator orchestration service
 ├── packages/
-│   └── shared/         # @aliremote/shared — types, constants
+│   └── shared/         # @droidstack/shared — types, constants
+├── agent/              # Android agent (ADB executor)
 ├── docker/
-│   └── emulator/        # docker-android compose
-└── docs/
+│   └── emulator/       # docker-android compose
+└── supabase/           # Migrations & SQL
 ```
 
 ---

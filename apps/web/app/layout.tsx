@@ -15,9 +15,9 @@ const syne = Syne({
 });
 
 export const metadata: Metadata = {
-  title: "ALI Remote — Remote Device Control Platform",
+  title: "Droidstack — Remote Android device orchestration",
   description:
-    "Control and automate Android emulators from anywhere. Web-based dashboard, 24/7 access, seamless automation.",
+    "Remote Android device orchestration platform. Control, scale, automate devices effortlessly.",
 };
 
 export default function RootLayout({

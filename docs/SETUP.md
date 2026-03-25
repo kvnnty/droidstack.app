@@ -1,6 +1,46 @@
-# ALI Remote — Setup Instructions
+# Droidstack — Setup & documentation
 
-Production-quality MVP for virtual Android devices in the cloud.
+Remote Android device orchestration platform. Control, scale, automate devices effortlessly.
+
+## Stack
+
+- **Monorepo** — pnpm workspaces
+- **Web** — Next.js 14 (App Router), Tailwind
+- **API** — NestJS
+- **Orchestrator** — Docker-based Android emulators
+- **Shared** — `@droidstack/shared` (types, constants)
+- **Database** — Supabase (Postgres + Auth)
+- **Billing** — Stripe
+- **Devices** — Android emulators (docker-android)
+
+## Project structure
+
+```
+droidstack/
+├── apps/
+│   ├── web/              # Next.js frontend (dashboard)
+│   ├── api/              # NestJS backend
+│   └── orchestrator/     # Device orchestrator
+├── packages/
+│   └── shared/           # Shared types & constants
+├── agent/                # Android agent (ADB command executor)
+├── docker/
+│   └── emulator/         # docker-android config
+├── docs/
+│   └── SETUP.md          # This file
+└── PROJECT.md            # Project spec
+```
+
+## Quick start
+
+```bash
+pnpm install
+pnpm --filter @droidstack/shared build
+
+# Dev (separate terminals — see full setup for orchestrator & env)
+pnpm dev:web    # http://localhost:3000
+pnpm dev:api    # http://localhost:3001
+```
 
 ## Architecture
 
@@ -28,7 +68,23 @@ User → Dashboard (Next.js) → Backend API (NestJS) → Device Orchestrator �
    - `supabase/migrations/20250306100000_devices_schema.sql`
    - `supabase/migrations/20250306200000_devices_orchestrator_billing.sql`
 3. Enable **Google** in Auth → Providers
-4. For **Email OTP**: Edit Auth → Email Templates → Magic Link, add `{{ .Token }}`
+4. **Email OTP (6-digit code)**: The app uses OTP, not magic links. In [Auth → Email Templates](https://supabase.com/dashboard/project/_/auth/templates), update **both** templates to show the code instead of a link:
+   - **Confirm signup** — used for new users
+   - **Magic Link** — used for existing users
+
+   Replace the default link-based content with:
+   ```html
+   <h2>Your sign-in code</h2>
+   <p>Enter this 6-digit code in the app:</p>
+   <p style="font-size:24px;font-weight:bold;letter-spacing:4px;">{{ .Token }}</p>
+   <p>This code expires in 5 minutes.</p>
+   ```
+   The `{{ .Token }}` variable contains the 6-digit OTP. Do not use `{{ .ConfirmationURL }}` — that sends a magic link.
+
+**Auth options**
+
+- **Google OAuth** — enable in [Supabase → Auth → Providers](https://supabase.com/dashboard/project/_/auth/providers)
+- **Email OTP** — templates as above
 
 ## 2. Stripe Setup
 
@@ -72,11 +128,13 @@ PORT_RANGE_START=6000
 PORT_RANGE_END=7000
 ```
 
+Copy `.env.example` to `.env.local` (web) and `.env` (api) where applicable.
+
 ## 4. Install & Run
 
 ```bash
 pnpm install
-pnpm --filter @aliremote/shared build
+pnpm --filter @droidstack/shared build
 
 # Terminal 1: Backend API
 pnpm dev:api
@@ -96,8 +154,10 @@ pnpm dev:web
 
 The orchestrator launches Android emulator containers. It requires:
 
-- **Docker** with access to `/var/run/docker.sock`
-- **KVM** (`/dev/kvm`) — hardware virtualization
+- **Docker** with access to the Docker socket (Linux: `/var/run/docker.sock`, Windows: `//./pipe/docker_engine`)
+- **KVM** (`/dev/kvm`) — hardware virtualization (Linux only; emulators may not run in Docker on Windows)
+
+**First device creation**: The orchestrator auto-pulls `budtmo/docker-android:emulator_13.0` (~2GB) if missing. This can take several minutes.
 
 Supported hosts: GCP Compute Engine, Hetzner dedicated, AWS Bare Metal, or nested-VPS.
 
@@ -132,10 +192,26 @@ stripe listen --forward-to localhost:3001/billing/webhook
 
 Use the printed webhook secret in `STRIPE_WEBHOOK_SECRET`.
 
-## 9. Production Checklist
+## 9. Troubleshooting
+
+**"Could not find the table 'public.devices' in the schema cache"**
+
+The database migrations haven't been run. Run the combined migration:
+
+1. Open [Supabase Dashboard](https://supabase.com/dashboard) → your project → **SQL Editor**
+2. Copy the contents of `supabase/run_all_migrations.sql`
+3. Paste and click **Run**
+
+Or run the individual migrations in order (see [Database (Supabase)](#1-database-supabase)).
+
+## 10. Production Checklist
 
 - [ ] HTTPS for API and dashboard
 - [ ] Supabase redirect URLs configured
 - [ ] Stripe webhook URL (production)
 - [ ] Orchestrator on KVM host
 - [ ] `NEXT_PUBLIC_ORCHESTRATOR_HOST` for noVNC URLs
+
+## License
+
+Private

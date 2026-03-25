@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/client';
+import { getStoredOrganizationId } from '@/lib/org-storage';
 import type {
   Device,
   DeviceGroup,
@@ -6,6 +7,7 @@ import type {
   DeviceAlert,
   CommandType,
 } from './types';
+import type { OrganizationSummary } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
@@ -17,10 +19,13 @@ async function getAuthHeaders(): Promise<HeadersInit> {
   if (!session?.access_token) {
     throw new Error('Not authenticated');
   }
-  return {
+  const headers: Record<string, string> = {
     Authorization: `Bearer ${session.access_token}`,
     'Content-Type': 'application/json',
   };
+  const orgId = getStoredOrganizationId();
+  if (orgId) headers['X-Organization-Id'] = orgId;
+  return headers;
 }
 
 async function fetchApi<T>(
@@ -37,7 +42,9 @@ async function fetchApi<T>(
     throw new Error(err || `HTTP ${res.status}`);
   }
   if (res.status === 204) return undefined as T;
-  return res.json();
+  const text = await res.text();
+  if (!text) return undefined as T;
+  return JSON.parse(text) as T;
 }
 
 export const api = {
@@ -115,5 +122,80 @@ export const api = {
       fetchApi<DeviceAlert[]>(`/devices/alerts${all ? '?all=true' : ''}`),
     resolve: (id: string) =>
       fetchApi<void>(`/devices/alerts/${id}/resolve`, { method: 'POST' }),
+  },
+  organizations: {
+    list: () => fetchApi<OrganizationSummary[]>('/organizations'),
+    create: (name: string) =>
+      fetchApi<OrganizationSummary>('/organizations', {
+        method: 'POST',
+        body: JSON.stringify({ name }),
+      }),
+    rename: (orgId: string, name: string) =>
+      fetchApi<{ ok: boolean }>(`/organizations/${orgId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name }),
+      }),
+    members: (orgId: string) =>
+      fetchApi<
+        {
+          userId: string;
+          role: string;
+          createdAt: string;
+          displayName: string | null;
+          avatarUrl: string | null;
+        }[]
+      >(`/organizations/${orgId}/members`),
+    patchMemberRole: (orgId: string, memberUserId: string, role: string) =>
+      fetchApi<{ ok: boolean }>(`/organizations/${orgId}/members/${memberUserId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ role }),
+      }),
+    removeMember: (orgId: string, memberUserId: string) =>
+      fetchApi<{ ok: boolean }>(`/organizations/${orgId}/members/${memberUserId}`, {
+        method: 'DELETE',
+      }),
+    invitations: (orgId: string) =>
+      fetchApi<
+        {
+          id: string;
+          email: string;
+          role: string;
+          deviceIds: string[];
+          expiresAt: string;
+          createdAt: string;
+        }[]
+      >(`/organizations/${orgId}/invitations`),
+    createInvitation: (
+      orgId: string,
+      body: { email: string; role: 'admin' | 'member'; deviceIds?: string[] },
+    ) =>
+      fetchApi<{
+        id: string;
+        email: string;
+        role: string;
+        deviceIds: string[];
+        token: string;
+        expiresAt: string;
+        createdAt: string;
+      }>(`/organizations/${orgId}/invitations`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    deleteInvitation: (orgId: string, invitationId: string) =>
+      fetchApi<{ ok: boolean }>(`/organizations/${orgId}/invitations/${invitationId}`, {
+        method: 'DELETE',
+      }),
+    memberDevices: (orgId: string, memberUserId: string) =>
+      fetchApi<string[]>(`/organizations/${orgId}/members/${memberUserId}/devices`),
+    setMemberDevices: (orgId: string, memberUserId: string, deviceIds: string[]) =>
+      fetchApi<void>(`/organizations/${orgId}/members/${memberUserId}/devices`, {
+        method: 'PUT',
+        body: JSON.stringify({ deviceIds }),
+      }),
+    acceptInvitation: (token: string) =>
+      fetchApi<{ organizationId: string }>('/organizations/invitations/accept', {
+        method: 'POST',
+        body: JSON.stringify({ token }),
+      }),
   },
 };

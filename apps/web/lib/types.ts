@@ -1,8 +1,20 @@
+export type OrgRole = 'owner' | 'admin' | 'member';
+
+export type OrganizationSummary = {
+  id: string;
+  name: string;
+  slug: string;
+  isPersonal: boolean;
+  createdAt: string;
+  role: OrgRole;
+};
+
 export type DeviceStatus = 'online' | 'offline' | 'busy' | 'error' | 'starting' | 'running' | 'stopped';
 
 export interface Device {
   id: string;
   userId: string;
+  organizationId?: string;
   groupId?: string;
   name: string;
   deviceName?: string;
@@ -28,6 +40,7 @@ export interface Device {
 export interface DeviceGroup {
   id: string;
   userId: string;
+  organizationId?: string;
   name: string;
   deviceCount?: number;
   createdAt: string;

@@ -1,5 +1,5 @@
 /**
- * @aliremote/shared — Types and constants shared between web and api
+ * @droidstack/shared — Types and constants shared between web and api
  */
 
 export * from './types';

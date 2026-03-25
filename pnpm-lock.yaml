@@ -22,7 +22,7 @@ importers:
 
   apps/api:
     dependencies:
-      '@aliremote/shared':
+      '@droidstack/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       '@nestjs/common':

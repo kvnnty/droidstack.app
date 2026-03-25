@@ -1,15 +1,23 @@
 'use client';
 
 import { api } from '@/lib/api';
+import { canManageDevices, useOrg } from '@/lib/org-context';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export default function NewDevicePage() {
   const router = useRouter();
+  const { currentOrg } = useOrg();
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (currentOrg && !canManageDevices(currentOrg.role)) {
+      router.replace('/dashboard/devices');
+    }
+  }, [currentOrg, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -5,6 +5,7 @@ export type DeviceStatus = 'online' | 'offline' | 'busy' | 'error';
 export interface Device {
   id: string;
   userId: string;
+  organizationId?: string;
   groupId?: string;
   name: string;
   deviceSerial?: string;
@@ -23,6 +24,7 @@ export interface Device {
 export interface DeviceGroup {
   id: string;
   userId: string;
+  organizationId?: string;
   name: string;
   deviceCount?: number;
   createdAt: string;

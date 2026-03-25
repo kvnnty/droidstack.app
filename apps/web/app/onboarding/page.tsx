@@ -47,7 +47,7 @@ export default function OnboardingPage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 py-12">
       <div className="w-full max-w-sm">
         <Link href="/" className="mb-8 inline-block font-display text-xl font-bold text-slate-900">
-          ALI Remote
+          Droidstack
         </Link>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">

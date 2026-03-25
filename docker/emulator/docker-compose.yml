@@ -5,7 +5,7 @@
 services:
   emulator-1:
     image: budtmo/docker-android:emulator_13.0
-    container_name: aliremote-emulator-1
+    container_name: droidstack-emulator-1
     privileged: true
     ports:
       - "6080:6080"   # noVNC

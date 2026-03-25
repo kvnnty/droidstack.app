@@ -1,6 +1,7 @@
 'use client';
 
 import { api } from '@/lib/api';
+import { canManageDevices, useOrg } from '@/lib/org-context';
 import type { Device } from '@/lib/types';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
@@ -15,6 +16,8 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 export default function DevicesPage() {
+  const { currentOrg } = useOrg();
+  const manageDevices = canManageDevices(currentOrg?.role);
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -30,7 +33,7 @@ export default function DevicesPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentOrg?.id]);
 
   useEffect(() => {
     load();
@@ -81,13 +84,15 @@ export default function DevicesPage() {
       <div className="mt-8">
         {devices.length === 0 ? (
           <div className="rounded-xl border border-slate-200 bg-white p-12 text-center">
-            <p className="text-slate-600">No devices yet.</p>
-            <Link
-              href="/dashboard/devices/new"
-              className="mt-4 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
-            >
-              Create your first device
-            </Link>
+            <p className="text-slate-600">No devices in this organization{manageDevices ? ' yet' : ' are assigned to you'}.</p>
+            {manageDevices && (
+              <Link
+                href="/dashboard/devices/new"
+                className="mt-4 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+              >
+                Create your first device
+              </Link>
+            )}
           </div>
         ) : (
           <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

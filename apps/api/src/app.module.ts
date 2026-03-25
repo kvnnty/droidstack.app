@@ -10,6 +10,7 @@ import { DevicesModule } from './devices/devices.module';
 import { OrchestratorModule } from './orchestrator/orchestrator.module';
 import { SupabaseModule } from './supabase/supabase.module';
 import { UsersModule } from './users/users.module';
+import { OrganizationsModule } from './organizations/organizations.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { UsersModule } from './users/users.module';
     SupabaseModule,
     AuthModule,
     UsersModule,
+    OrganizationsModule,
     DevicesModule,
     AgentModule,
     OrchestratorModule,

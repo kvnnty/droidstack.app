@@ -83,6 +83,28 @@ export class BillingService {
     return { allowed: true };
   }
 
+  /** Limits active/running devices in an organization to the org owner's subscription. */
+  async canCreateDeviceInOrg(
+    ownerUserId: string,
+    organizationId: string,
+  ): Promise<{ allowed: boolean; reason?: string }> {
+    const sub = await this.getSubscription(ownerUserId);
+    const { count } = await this.getClient()
+      .from('devices')
+      .select('*', { count: 'exact', head: true })
+      .eq('organization_id', organizationId)
+      .in('status', ['starting', 'running']);
+
+    const limit = sub?.deviceLimit ?? 1;
+    if ((count ?? 0) >= limit) {
+      return { allowed: false, reason: `Device limit reached (${limit}). Upgrade your plan.` };
+    }
+    if (sub && sub.status !== 'active' && sub.status !== 'trialing') {
+      return { allowed: false, reason: 'Subscription inactive. Please update billing.' };
+    }
+    return { allowed: true };
+  }
+
   async createCheckoutSession(userId: string, email: string, successUrl: string, cancelUrl: string): Promise<string> {
     if (!PRICE_PER_DEVICE) throw new Error('STRIPE_PRICE_PER_DEVICE not configured');
     const customerId = await this.getOrCreateCustomer(userId, email);
@@ -194,10 +216,19 @@ export class BillingService {
   }
 
   private async stopAllUserDevices(userId: string): Promise<void> {
+    const { data: ownedOrgs } = await this.getClient()
+      .from('organization_members')
+      .select('organization_id')
+      .eq('user_id', userId)
+      .eq('role', 'owner');
+
+    const orgIds = (ownedOrgs ?? []).map((r) => r.organization_id as string);
+    if (orgIds.length === 0) return;
+
     const { data: devices } = await this.getClient()
       .from('devices')
       .select('id, container_id')
-      .eq('user_id', userId)
+      .in('organization_id', orgIds)
       .not('container_id', 'is', null);
 
     for (const d of devices ?? []) {

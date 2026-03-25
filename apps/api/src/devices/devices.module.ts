@@ -1,12 +1,13 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { BillingModule } from '../billing/billing.module';
+import { OrganizationsModule } from '../organizations/organizations.module';
 import { OrchestratorModule } from '../orchestrator/orchestrator.module';
 import { DevicesController } from './devices.controller';
 import { DevicesService } from './devices.service';
 
 @Module({
-  imports: [AuthModule, OrchestratorModule, BillingModule],
+  imports: [AuthModule, OrchestratorModule, BillingModule, OrganizationsModule],
   controllers: [DevicesController],
   providers: [DevicesService],
 })

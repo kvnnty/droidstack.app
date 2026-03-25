@@ -19,6 +19,7 @@ function maskEmail(email: string) {
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const nextPath = searchParams.get('next') ?? '/dashboard';
   const supabase = createClient();
   const [step, setStep] = useState<'choose' | 'email' | 'otp'>('choose');
   const [email, setEmail] = useState('');
@@ -42,7 +43,7 @@ function LoginForm() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`,
         },
       });
       if (error) throw error;
@@ -50,7 +51,7 @@ function LoginForm() {
       setError(err instanceof Error ? err.message : 'Failed to sign in with Google');
       setLoading(false);
     }
-  }, [supabase.auth]);
+  }, [supabase.auth, nextPath]);
 
   const handleEmailSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -148,7 +149,7 @@ function LoginForm() {
           type: 'email',
         });
         if (error) throw error;
-        router.push('/dashboard');
+        router.push(nextPath);
         router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Invalid or expired code');
@@ -158,7 +159,7 @@ function LoginForm() {
         setLoading(false);
       }
     },
-    [email, otp, supabase.auth, router]
+    [email, otp, supabase.auth, router, nextPath]
   );
 
   const handleBack = useCallback(() => {
@@ -173,7 +174,7 @@ function LoginForm() {
         href="/"
         className="mb-8 inline-block font-display text-xl font-bold text-slate-900"
       >
-        ALI Remote
+        Droidstack
       </Link>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
