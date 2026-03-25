@@ -1,7 +1,12 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { api } from '@/lib/api';
 import { canManageDevices, useOrg } from '@/lib/org-context';
+import type { DeviceHostPlatform } from '@/lib/types';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -10,6 +15,7 @@ export default function NewDevicePage() {
   const router = useRouter();
   const { currentOrg } = useOrg();
   const [name, setName] = useState('');
+  const [hostPlatform, setHostPlatform] = useState<DeviceHostPlatform>('android');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -28,6 +34,7 @@ export default function NewDevicePage() {
       const device = await api.devices.create({
         name: name.trim(),
         deviceName: name.trim(),
+        hostPlatform,
         androidVersion: '13',
         cpu: 2,
         ram: 2048,
@@ -43,42 +50,61 @@ export default function NewDevicePage() {
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-8">
-      <Link href="/dashboard/devices" className="text-sm text-slate-500 hover:text-slate-700">
-        ← Back to devices
-      </Link>
+      <Button variant="link" className="h-auto p-0 text-slate-500 hover:text-slate-700" asChild>
+        <Link href="/dashboard/devices">← Back to devices</Link>
+      </Button>
       <h1 className="mt-6 font-display text-2xl font-bold text-slate-900">Create device</h1>
       <p className="mt-2 text-slate-600">
-        A new virtual Android device will be created. This may take a minute to start.
+        Spin up a remote device. Choose the host type for the agent that will connect to it.
       </p>
 
       {error && (
         <div className="mt-6 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
       )}
 
-      <form onSubmit={handleSubmit} className="mt-8">
-        <label className="block text-sm font-medium text-slate-700">Device name</label>
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="My Android device"
-          required
-          className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3"
-        />
-        <div className="mt-6 flex gap-3">
-          <Link
-            href="/dashboard/devices"
-            className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium"
+      <form onSubmit={handleSubmit} className="mt-8 space-y-6">
+        <div className="space-y-2">
+          <Label htmlFor="host-platform">Device type</Label>
+          <p className="text-xs text-slate-500">Which platform the enrolled device runs.</p>
+          <ToggleGroup
+            id="host-platform"
+            type="single"
+            variant="outline"
+            value={hostPlatform}
+            onValueChange={(v) => {
+              if (v === 'android' || v === 'ios') setHostPlatform(v);
+            }}
+            className="w-full justify-stretch sm:w-auto"
           >
-            Cancel
-          </Link>
-          <button
-            type="submit"
-            disabled={loading}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-          >
+            <ToggleGroupItem value="android" aria-label="Android" className="min-w-0 flex-1 sm:flex-initial">
+              Android
+            </ToggleGroupItem>
+            <ToggleGroupItem value="ios" disabled aria-label="iOS (coming soon)" className="min-w-0 flex-1 sm:flex-initial">
+              iOS
+            </ToggleGroupItem>
+          </ToggleGroup>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="device-name">Device name</Label>
+          <Input
+            id="device-name"
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="My Android device"
+            required
+            autoComplete="off"
+          />
+        </div>
+
+        <div className="flex gap-3">
+          <Button variant="outline" asChild>
+            <Link href="/dashboard/devices">Cancel</Link>
+          </Button>
+          <Button type="submit" disabled={loading}>
             {loading ? 'Creating...' : 'Create device'}
-          </button>
+          </Button>
         </div>
       </form>
     </main>

@@ -11,7 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { User } from '@supabase/supabase-js';
-import type { CommandType } from '@droidstack/shared';
+import type { CommandType, DeviceHostPlatform } from '@droidstack/shared';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { SupabaseAuthGuard } from '../auth/supabase-auth.guard';
 import { OrganizationsService } from '../organizations/organizations.service';
@@ -126,6 +126,7 @@ export class DevicesController {
       groupId?: string;
       type?: 'emulator' | 'physical';
       osVersion?: string;
+      hostPlatform?: DeviceHostPlatform;
       metadata?: Record<string, unknown>;
     },
     @Headers('x-organization-id') orgHeader?: string,

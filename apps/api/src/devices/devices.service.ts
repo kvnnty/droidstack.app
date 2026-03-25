@@ -1,10 +1,16 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type {
   Device,
   DeviceGroup,
   DeviceCommand,
   DeviceAlert,
   CommandType,
+  DeviceHostPlatform,
 } from '@droidstack/shared';
 import { BillingService } from '../billing/billing.service';
 import type { OrgRequestContext, OrgRole } from '../organizations/organizations.types';
@@ -14,6 +20,9 @@ import { SupabaseService } from '../supabase/supabase.service';
 function mapDevice(row: Record<string, unknown>): Device & { containerId?: string; deviceName?: string; adbPort?: number; novncPort?: number } {
   const meta = (row.metadata as Record<string, unknown>) ?? {};
   const ports = meta.ports as { adb?: number; novnc?: number } | undefined;
+  const hp = meta.hostPlatform;
+  const hostPlatform =
+    hp === 'android' || hp === 'ios' ? hp : undefined;
   return {
     id: row.id as string,
     userId: row.user_id as string,
@@ -25,6 +34,7 @@ function mapDevice(row: Record<string, unknown>): Device & { containerId?: strin
     status: row.status as Device['status'],
     type: row.type as Device['type'],
     osVersion: row.os_version as string | undefined,
+    hostPlatform,
     metadata: meta,
     batteryLevel: row.battery_level as number | undefined,
     lastSeenAt: row.last_seen_at as string | undefined,
@@ -193,6 +203,7 @@ export class DevicesService {
       groupId?: string;
       type?: 'emulator' | 'physical';
       osVersion?: string;
+      hostPlatform?: DeviceHostPlatform;
       metadata?: Record<string, unknown>;
     },
   ): Promise<Device> {
@@ -206,6 +217,16 @@ export class DevicesService {
 
     const canCreate = await this.billing.canCreateDeviceInOrg(ctx.ownerUserId, ctx.organizationId);
     if (!canCreate.allowed) throw new Error(canCreate.reason ?? 'Cannot create device');
+
+    const hostPlatform = body.hostPlatform ?? 'android';
+    if (hostPlatform === 'ios') {
+      throw new BadRequestException('iOS device enrollment is not available yet');
+    }
+
+    const metadata = {
+      ...(body.metadata ?? {}),
+      hostPlatform,
+    };
 
     const agentToken = this.generateAgentToken();
     const { data: inserted, error } = await this.getClient()
@@ -224,7 +245,7 @@ export class DevicesService {
         type: body.type ?? 'emulator',
         os_version: body.osVersion,
         status: 'starting',
-        metadata: body.metadata ?? {},
+        metadata,
         agent_token: agentToken,
       })
       .select()

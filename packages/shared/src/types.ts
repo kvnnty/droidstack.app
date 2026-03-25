@@ -1,3 +1,6 @@
+/** Host OS the remote agent targets (stored on device metadata as `hostPlatform`) */
+export type DeviceHostPlatform = 'android' | 'ios';
+
 /** Device status */
 export type DeviceStatus = 'online' | 'offline' | 'busy' | 'error';
 
@@ -12,6 +15,8 @@ export interface Device {
   status: DeviceStatus;
   type: 'emulator' | 'physical';
   osVersion?: string;
+  /** Present when stored in metadata (e.g. dashboard enrollment) */
+  hostPlatform?: DeviceHostPlatform;
   metadata?: Record<string, unknown>;
   batteryLevel?: number;
   lastSeenAt?: string;

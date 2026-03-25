@@ -11,6 +11,8 @@ export type OrganizationSummary = {
 
 export type DeviceStatus = 'online' | 'offline' | 'busy' | 'error' | 'starting' | 'running' | 'stopped';
 
+export type DeviceHostPlatform = 'android' | 'ios';
+
 export interface Device {
   id: string;
   userId: string;
@@ -22,6 +24,7 @@ export interface Device {
   status: DeviceStatus;
   type: 'emulator' | 'physical';
   osVersion?: string;
+  hostPlatform?: DeviceHostPlatform;
   androidVersion?: string;
   cpu?: number;
   ram?: number;

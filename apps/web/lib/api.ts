@@ -6,6 +6,7 @@ import type {
   DeviceCommand,
   DeviceAlert,
   CommandType,
+  DeviceHostPlatform,
 } from './types';
 import type { OrganizationSummary } from './types';
 
@@ -63,6 +64,7 @@ export const api = {
       groupId?: string;
       type?: 'emulator' | 'physical';
       osVersion?: string;
+      hostPlatform?: DeviceHostPlatform;
       metadata?: Record<string, unknown>;
     }) => fetchApi<Device>('/devices', { method: 'POST', body: JSON.stringify(body) }),
     update: (id: string, body: Partial<Device>) =>
